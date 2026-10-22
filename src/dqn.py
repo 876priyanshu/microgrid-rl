@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+from env import C_CRIT, R_SCALE
 
 
 class QNet(nn.Module):
@@ -27,25 +28,31 @@ class QNet(nn.Module):
 
 
 class ReplayBuffer:
+    """Stores (state, action, base_reward, next_state, done, unserved_critical_kWh).
+    base_reward excludes the critical-load penalty, which is added at learning time
+    using the CURRENT lambda."""
     def __init__(self, size, obs_dim):
         self.s = np.zeros((size, obs_dim), np.float32)
         self.s2 = np.zeros((size, obs_dim), np.float32)
         self.a = np.zeros(size, np.int64)
         self.r = np.zeros(size, np.float32)
         self.d = np.zeros(size, np.float32)
+        self.u = np.zeros(size, np.float32)
         self.size, self.n, self.i = size, 0, 0
 
-    def add(self, s, a, r, s2, d):
+    def add(self, s, a, r, s2, d, u=0.0):
         self.s[self.i], self.a[self.i], self.r[self.i] = s, a, r
-        self.s2[self.i], self.d[self.i] = s2, d
+        self.s2[self.i], self.d[self.i], self.u[self.i] = s2, d, u
         self.i = (self.i + 1) % self.size
         self.n = min(self.n + 1, self.size)
 
-    def sample(self, batch):
-        idx = np.random.randint(0, self.n, size=batch)
+    def _gather(self, idx):
         return (torch.from_numpy(self.s[idx]), torch.from_numpy(self.a[idx]),
                 torch.from_numpy(self.r[idx]), torch.from_numpy(self.s2[idx]),
-                torch.from_numpy(self.d[idx]))
+                torch.from_numpy(self.d[idx]), torch.from_numpy(self.u[idx]))
+
+    def sample(self, batch):
+        return self._gather(np.random.randint(0, self.n, size=batch))
 
 
 class PrioritizedBuffer(ReplayBuffer):
@@ -55,9 +62,9 @@ class PrioritizedBuffer(ReplayBuffer):
         self.p = np.zeros(size, np.float64)
         self.alpha, self.max_p = alpha, 1.0
 
-    def add(self, s, a, r, s2, d):
+    def add(self, s, a, r, s2, d, u=0.0):
         self.p[self.i] = self.max_p                  # new data gets top priority
-        super().add(s, a, r, s2, d)
+        super().add(s, a, r, s2, d, u)
 
     def sample(self, batch, beta=0.4):
         pr = self.p[:self.n] ** self.alpha
@@ -65,10 +72,7 @@ class PrioritizedBuffer(ReplayBuffer):
         idx = np.random.choice(self.n, batch, p=probs)
         w = (self.n * probs[idx]) ** (-beta)
         w = (w / w.max()).astype(np.float32)         # importance weights fix the bias
-        tensors = (torch.from_numpy(self.s[idx]), torch.from_numpy(self.a[idx]),
-                   torch.from_numpy(self.r[idx]), torch.from_numpy(self.s2[idx]),
-                   torch.from_numpy(self.d[idx]))
-        return tensors, idx, torch.from_numpy(w)
+        return self._gather(idx), idx, torch.from_numpy(w)
 
     def update(self, idx, td_abs):
         self.p[idx] = td_abs + 1e-3
@@ -84,6 +88,7 @@ class DQNAgent:
         self.opt = torch.optim.Adam(self.q.parameters(), lr=lr)
         self.buf = PrioritizedBuffer(buffer_size, obs_dim) if per else ReplayBuffer(buffer_size, obs_dim)
         self.double, self.per, self.beta = double, per, 0.4
+        self.lam = 1.0                               # weight on unserved critical load
         self.gamma, self.batch, self.target_every = gamma, batch, target_every
         self.n_actions, self.steps = n_actions, 0
 
@@ -97,9 +102,10 @@ class DQNAgent:
         if self.buf.n < self.batch:
             return None
         if self.per:
-            (s, a, r, s2, d), idx, w = self.buf.sample(self.batch, self.beta)
+            (s, a, r, s2, d, u), idx, w = self.buf.sample(self.batch, self.beta)
         else:
-            s, a, r, s2, d = self.buf.sample(self.batch)
+            s, a, r, s2, d, u = self.buf.sample(self.batch)
+        r = r - self.lam * C_CRIT * u / R_SCALE      # rebuild reward with the current lambda
         q_sa = self.q(s).gather(1, a.unsqueeze(1)).squeeze(1)
         with torch.no_grad():
             if self.double:
@@ -124,4 +130,3 @@ class DQNAgent:
 
     def greedy_policy(self):
         return lambda obs: self.act(obs, eps=0.0)
-        
