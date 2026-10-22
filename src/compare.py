@@ -4,7 +4,7 @@ from dqn import QNet
 from baselines import idle_policy, rule_policy, make_scenarios, evaluate, evaluate_oracle
 
 def load_policy(path):
-    q = QNet(11, 6, dueling=("dueling" in path or "full" in path)) #q = QNet(11, 6)
+    q = QNet(11, 6, dueling=any(k in path for k in ("dueling", "full", "constrained"))) #q = QNet(11, 6)
 
     q.load_state_dict(torch.load(path)); q.eval()
     def pol(obs):
