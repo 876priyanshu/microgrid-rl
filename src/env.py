@@ -13,6 +13,7 @@ C_SHED, C_FORCED, C_CRIT = 15.0, 40.0, 200.0                # Rs/kWh penalties
 R_SCALE = 1000.0
 
 class MicrogridEnv:
+    """One episode = one day = 24 hourly steps."""
     n_actions = 6   # {charge, discharge, idle} x {keep, shed non-critical}
     obs_dim = 11
 
@@ -27,16 +28,20 @@ class MicrogridEnv:
         self.rng = np.random.default_rng(seed)
         self.lam = 1.0   # constraint multiplier, used later
 
-    def reset(self, day=None):
+    def reset(self, day=None, outage=None):
         self.day = int(self.rng.integers(self.n_days)) if day is None else day
         self.h, self.soc = 0, 0.5 * CAP
         self.pv = np.clip(self.sun[self.day], 0, None) * PV_COEF
         self.noncrit = (80 + 8*np.maximum(self.temp[self.day] - 25, 0)) * SHAPE
         self.out_start, self.out_len = -1, 0
-        if self.rng.random() < self.outage_prob:
+        if outage is not None:                      # fixed scenario: (start_hour, length)
+            self.out_start, self.out_len = outage
+        elif self.rng.random() < self.outage_prob:
             self.out_start = int(self.rng.integers(8, 21))
             self.out_len = int(self.rng.integers(2, 5))
         return self._obs()
+        
+            
 
     def _in_outage(self, h):
         return self.out_start >= 0 and self.out_start <= h < self.out_start + self.out_len
