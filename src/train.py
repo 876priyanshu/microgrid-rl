@@ -26,7 +26,6 @@ val_sc = make_scenarios(val_env, n=100, seed=7)
 agent = DQNAgent(env.obs_dim, env.n_actions, double=args.double,
                  dueling=args.dueling, per=args.per)
 log, recent_u, lam = [], [], 1.0
-lam = float(np.clip(lam + args.eta * (np.mean(recent_u) - args.budget), 0.0, args.lam_max))
 best_score, best_state = -1e9, None
 for ep in range(1, args.episodes + 1):
     eps = max(0.05, 1.0 - ep / (0.6 * args.episodes))
