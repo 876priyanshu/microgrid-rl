@@ -14,6 +14,7 @@ ap.add_argument("--budget", type=float, default=0.3)    # allowed unserved criti
 ap.add_argument("--eta", type=float, default=0.1)       # how fast lambda reacts
 ap.add_argument("--seed", type=int, default=0)
 ap.add_argument("--episodes", type=int, default=3000)
+ap.add_argument("--lam_max", type=float, default=20.0)
 args = ap.parse_args()
 
 np.random.seed(args.seed); torch.manual_seed(args.seed)
@@ -25,6 +26,7 @@ val_sc = make_scenarios(val_env, n=100, seed=7)
 agent = DQNAgent(env.obs_dim, env.n_actions, double=args.double,
                  dueling=args.dueling, per=args.per)
 log, recent_u, lam = [], [], 1.0
+lam = float(np.clip(lam + args.eta * (np.mean(recent_u) - args.budget), 0.0, args.lam_max))
 best_score, best_state = -1e9, None
 for ep in range(1, args.episodes + 1):
     eps = max(0.05, 1.0 - ep / (0.6 * args.episodes))
