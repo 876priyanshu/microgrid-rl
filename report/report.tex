@@ -1,199 +1,122 @@
-% ============================================================
-%  Outage-Aware Campus Microgrid Control with Deep RL
-%  2-page report  —  IEEE two-column format
-% ============================================================
-\documentclass[10pt,twocolumn]{article}
-
-% ---- packages -----------------------------------------------
-\usepackage[margin=1.8cm,top=2cm,bottom=2cm]{geometry}
-\usepackage{times}
+﻿\documentclass[10pt,twocolumn]{article}
+\usepackage[letterpaper,top=0.65in,bottom=0.65in,left=0.7in,right=0.7in,columnsep=0.25in]{geometry}
+\usepackage{mathptmx}
 \usepackage{amsmath,amssymb}
-\usepackage{booktabs}
-\usepackage{graphicx}
-\usepackage{microtype}
-\usepackage{hyperref}
-\usepackage{xcolor}
-\usepackage{caption}
-\captionsetup{font=small,skip=4pt}
+\usepackage{graphicx,booktabs,xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage[font=footnotesize,labelfont=bf,skip=2pt]{caption}
+\usepackage{titlesec}
+\titleformat{\section}{\normalsize\bfseries\scshape}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\small\bfseries\itshape}{\thesubsection}{0.5em}{}
+\titlespacing*{\section}{0pt}{5pt}{2pt}
+\titlespacing*{\subsection}{0pt}{3pt}{1pt}
+\setlength{\parskip}{0pt}
+\setlength{\parindent}{9pt}
+\setlength{\textfloatsep}{5pt plus 1pt minus 1pt}
+\setlength{\floatsep}{4pt plus 1pt minus 1pt}
+\setlength{\intextsep}{4pt plus 1pt minus 1pt}
+\setlength{\abovedisplayskip}{2pt}
+\setlength{\belowdisplayskip}{2pt}
 
-% ---- title block --------------------------------------------
-\title{\textbf{Outage-Aware Campus Microgrid Control\\
-       with Deep Reinforcement Learning}}
-\author{[Name 1, Name 2, \ldots]\quad
-        \textit{AI, Assignment 2 --- Real-Life Use Cases of RL}}
-\date{}
+% Red placeholders: search for TODO and replace before submitting.
+\newcommand{\TODO}[1]{\textcolor{red}{\textbf{[#1]}}}
+% Figures: uses your PNG if it is next to this file, otherwise draws a labelled placeholder.
+\newcommand{\figslot}[3]{\IfFileExists{#1}{\includegraphics[width=#2]{#1}}{\fbox{\parbox[c][#3][c]{\dimexpr#2-2\fboxsep-2\fboxrule\relax}{\centering\small\textcolor{red}{INSERT \texttt{\detokenize{#1}}}}}}}
 
-% =============================================================
 \begin{document}
-\maketitle
-\thispagestyle{empty}
 
-% ---- ABSTRACT -----------------------------------------------
-\begin{abstract}
-We train a family of DQN agents---vanilla, Double, Dueling,
-Prioritised-Experience-Replay (PER), and Lagrangian-constrained
-variants---to operate a simulated campus solar-plus-battery microgrid.
-The best unconstrained agent (Dueling Double DQN + PER) cuts
-\textbf{operating cost (energy purchases plus comfort and wear
-penalties) by about 17\%} relative to the hand-written rule
-baseline and closes 80\,\% of the gap to a perfect-foresight oracle,
-while a Lagrangian multiplier scheme is investigated for critical-load
-protection. All components are implemented from scratch in PyTorch.
-\end{abstract}
-
-% =============================================================
-\section{Problem and RL Formulation}
-
-Each \textit{episode} is one simulated day (24 hourly steps).
-The \textbf{state} is an 11-dimensional vector: battery state of charge
-(\%), hour encoded as $(\sin,\cos)$, current solar generation, a 3-hour
-noisy solar forecast, electricity price, total load, a binary
-outage-active flag, and a noisy outage-warning signal.
-The \textbf{action space} has six discrete actions:
-\{charge, discharge, idle\}~$\times$~\{keep, shed non-critical load\}.
-
-The \textbf{reward} is
-\[
-r_t = -\bigl(c_{\text{grid}} + c_{\text{shed}} + c_{\text{cut}}
-             + c_{\text{wear}} + \lambda\,u_{\text{crit}}\bigr)\big/1000,
-\]
-where $c_{\text{grid}}$ is grid energy purchase cost, $c_{\text{shed}}$
-is voluntary shedding, $c_{\text{cut}}$ is forced-cut penalty,
-$c_{\text{wear}}$ is battery-cycle wear, and $u_{\text{crit}}$ is
-unserved critical energy.  For constrained agents $\lambda$ is updated
-by dual ascent so that average $u_{\text{crit}}$ stays near a per-day
-budget.
-
-\textbf{Data.} Real hourly solar irradiance from NASA POWER (2018--2023).
-Split: train 2018--2021, validation 2022, held-out test 2023.
-Battery: 400\,kWh / 100\,kW; 30\,\% of days have outages (2--4\,h).
-All load, tariff, and outage parameters are simulated assumptions.
-
-% =============================================================
-\section{Methods}
-
-We implement four incremental DQN improvements applied cumulatively:
-
-\begin{enumerate}\setlength\itemsep{1pt}
-  \item \textbf{Vanilla DQN} --- fixed target network, replay buffer.
-  \item \textbf{Double DQN} --- separate action-selection and evaluation
-        networks to reduce overestimation.
-  \item \textbf{Dueling DQN} --- separate value $V(s)$ and advantage
-        $A(s,a)$ streams.
-  \item \textbf{PER} --- prioritised experience replay weighted by TD
-        error.
-\end{enumerate}
-
-\textbf{Lagrangian constraint.}
-A constrained variant adds $\lambda$ as a trainable multiplier updated
-every 20 episodes via dual ascent:
-$\lambda \leftarrow \operatorname{clip}\!\bigl(\lambda +
-\eta(\bar u - B),\;0,\;\lambda_{\max}\bigr)$,
-where $B$ is the allowed unserved budget and $\eta$ is the step size.
-
-% =============================================================
-\section{Baselines}
-
-\textbf{Idle} --- battery never used.
-\textbf{Rule} --- sells at peak, stores spare solar, keeps a 30\,\%
-reserve, sheds during blackouts.
-\textbf{Oracle} --- per-day perfect-foresight dynamic programming;
-an upper-bound benchmark, not our agent.
-
-% =============================================================
-\section{Evaluation}
-\label{sec:eval}
-
-\textbf{Protocol.}
-All agents are evaluated on test year 2023 using 200 fixed (day,
-outage) scenarios drawn with seed 11.  Each DQN variant is trained
-with 3 seeds (0--2); we report mean\,$\pm$\,std.  Unconstrained
-variants use their final checkpoint; constrained models are shown
-with both the final and the best-validation checkpoint (selected on
-2022).
-
-Return $G$ and the reported \emph{Return} column are both computed
-with $\lambda{=}1$ for \emph{every} policy (constrained agents were
-trained with larger $\lambda$, so they are measured on a common
-yardstick rather than their own objective).
-``Cost'' is energy purchases plus shedding, forced-cut and wear
-penalties, and \emph{excludes} the critical-load penalty, which is
-reported separately as unserved energy (kWh/day).
-
-\textit{Note on randomness:} the (day, outage) scenarios are identical
-across all policies; forecast and outage-warning noise is drawn from
-each environment's own random stream and is therefore not bit-for-bit
-identical across policies---but the scenario set is the same.
-
-\begin{table}[h]
+\twocolumn[{%
 \centering
-\caption{Test-year 2023 results (200 scenarios, 3 seeds,
-  mean\,$\pm$\,std).
-  ``Gap'' $= (\text{agent}-\text{rule})\,/\,(\text{oracle}-\text{rule})$.
-  Cost excludes critical-load penalty (see text).}
-\label{tab:results}
-\setlength\tabcolsep{3.5pt}
-\small
-\begin{tabular}{lrrrr}
+{\Large\bfseries Outage-Aware Campus Microgrid Control with Deep Reinforcement Learning\par}
+\vspace{3pt}
+{\normalsize{Team members: Priyansu Rajput(B24CM1083), Ankit Vaniya(B24CM1064),}\par}
+{\small AI Course, Assignment 2 (Mini Project) \quad Code: {github.com/876priyanshu/microgrid-rl}\par}
+\vspace{4pt}
+\begin{minipage}{0.94\textwidth}\small
+\textbf{Abstract.} Campuses with solar panels and batteries overpay for electricity and suffer blackouts because fixed rules mismanage storage. We formulate hourly solar--battery dispatch as a (constrained) Markov decision process and train a Dueling Double DQN with prioritized replay, implemented from scratch, on real NASA POWER solar and temperature data. On a held-out test year the agent closes about 80\% of the gap between a hand-written rule policy and a perfect-foresight oracle and cuts operating cost (energy purchases plus comfort and wear penalties) by about 17\% relative to the rule, but it leaves slightly more critical load unserved. We also evaluate a Lagrangian blackout constraint; its results are mixed, and we report them as they are.
+\end{minipage}
+\vspace{6pt}
+}]
+
+\section{Problem}
+A campus with rooftop solar and a battery must decide every hour whether to store energy, use it, or buy from the grid. Prices change through the day, solar depends on weather, and outages strike unpredictably, so the value of stored energy depends on future events. This is a sequential decision problem under uncertainty with delayed consequences: a natural fit for RL, and one where fixed rules cannot anticipate outages.
+
+\section{RL Formulation}
+\subsection{Environment and data}
+One episode is one day ($T{=}24$ hourly steps). Hourly all-sky irradiance $G_t$ and 2\,m temperature come from NASA POWER \cite{power} for one campus location, 2018--2023 (train 2018--21, validation 2022, held-out test 2023). PV output is $0.32\,G_t$ kW; non-critical load rises with temperature (cooling) and follows a daily shape; critical load is 60 kW; the time-of-day tariff is $\pi_t\in\{5,7,10\}$ Rs/kWh. The battery has 400 kWh capacity, $\pm$100 kW power and 95\% one-way efficiency. With probability 0.3 per day an outage of 2--4 h starts at a random hour in 08--20: the grid is unavailable, non-critical load is cut first, and any remaining shortfall is unserved critical load. Forecasts (next 3 h of solar) carry 10\% noise, and an outage warning fires with probability 0.7 shortly before an outage (0.1 false alarms). All physical constants, the tariff and the outage model are our assumptions; outages are simulated.
+
+\subsection{State space $\mathcal S\subset\mathbb R^{11}$}
+$s_t=[\,b_t,\ \sin\tfrac{2\pi h}{24},\ \cos\tfrac{2\pi h}{24},\ p_t,\ \hat p_{t+1},\hat p_{t+2},\hat p_{t+3},\ \pi_t,\ \ell_t,\ o_t,\ w_t\,]$: battery fraction, hour of day (2 features), current solar, noisy 3-hour solar forecast, price, total load, outage-active flag, and noisy outage warning, all scaled to roughly $[0,1]$.
+
+\subsection{Action space $\mathcal A$ (discrete, $|\mathcal A|{=}6$)}
+Battery mode $\in\{$charge, discharge, idle$\}$ $\times$ $\{$keep, shed non-critical load$\}$.
+
+\subsection{Reward}
+With $g_t$ the energy bought, $P_t$ the battery power, $u^{nc}_t$ the forced non-critical cut and $u^{c}_t$ the unserved critical energy:
+\begin{equation}
+r_t=-\tfrac{1}{1000}\big[\pi_t g_t + c_s\sigma_t \ell^{nc}_t + c_f u^{nc}_t + c_w|P_t| + \lambda c_c u^{c}_t\big],
+\end{equation}
+with $c_s{=}15$, $c_f{=}40$, $c_w{=}0.05$, $c_c{=}200$ (Rs/kWh) and $\sigma_t\in\{0,1\}$ the shed flag. Planned shedding is cheaper than a forced cut, so the agent can learn to shed before an outage. The constraint $\mathbb E[\sum_t u^c_t]\le d$ is handled by a Lagrangian relaxation \cite{cmdp}: every 20 episodes $\lambda\leftarrow\mathrm{clip}(\lambda+\eta(\bar U-d),0,\lambda_{\max})$, where $\bar U$ is the recent mean daily unserved critical energy. Rewards are rebuilt from stored components with the current $\lambda$ at learning time.
+
+\section{Algorithm and Baselines}
+\textbf{Agent.} DQN \cite{dqn} with an MLP 11--128--128--6, replay buffer of 50k transitions, a target network synced every 500 updates, Huber loss, Adam (lr $10^{-3}$), $\gamma{=}0.99$, batch 64, and $\epsilon$-greedy decaying from 1 to 0.05 over the first 60\% of 3000 episodes. We add Double DQN \cite{ddqn} (online network selects, target network scores), a dueling head $Q=V+A-\overline{A}$ \cite{duel}, and prioritized replay \cite{per} ($\alpha{=}0.6$, importance weights with $\beta$ annealed 0.4$\to$1). Everything is implemented from scratch in PyTorch; no RL library or external repository is used.\\
+\textbf{Baselines.} \emph{Idle} (never uses the battery); \emph{rule} (sell at peak price, store spare sun and cheap power, keep a 30\% reserve, shed during blackouts); \emph{oracle}, a dynamic program over 41 battery levels with perfect knowledge of that day's solar, load and outage. The oracle is an upper-bound benchmark, not our agent.\\
+\textbf{Evaluation.} 200 fixed (day, outage) scenarios from the 2023 test year, identical for all policies, 3 training seeds. We report return, cost, unserved critical energy, and the gap closed $G=(R_{\text{agent}}-R_{\text{rule}})/(R_{\text{oracle}}-R_{\text{rule}})$. Return and $G$ are computed with $\lambda{=}1$ for every policy (constrained agents were trained with larger $\lambda$, so they are measured on a common yardstick rather than their own objective); ``cost'' is energy purchases plus shedding, forced-cut and wear penalties, and excludes the critical-load penalty, which is reported separately as unserved energy.
+
+\section{Results}
+\begin{table}[t]
+\centering\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\caption{Test year 2023 (mean $\pm$ std over 3 seeds). Unserved = critical load not served (kWh/day).}
+\begin{tabular}{@{}lrrrr@{}}
 \toprule
-Method & Return & Cost & Unserved & Gap \\
-       &        & (Rs/d) & (kWh/d) & closed \\
+Method & Return & Cost (Rs/d) & Unserved & $G$ (\%)\\
 \midrule
-rule              & $-14.80$ & 14744 & 0.30 & 0\%          \\
-oracle            & $-11.77$ & 11772 & 0.00 & 100\%        \\
+Rule & $-14.80$ & 14744 & 0.30 & 0\\
+Oracle & $-11.77$ & 11772 & 0.00 & 100\\
 \midrule
-DQN               & $-12.44{\pm}0.07$ & 12319 & 0.60 & $78.0\%{\pm}2.4$ \\
-+~Double          & $-12.36{\pm}0.09$ & 12272 & 0.44 & $80.6\%{\pm}2.9$ \\
-+~Dueling         & $-12.41{\pm}0.13$ & 12308 & 0.50 & $79.0\%{\pm}4.3$ \\
-+~PER             & $-12.65{\pm}0.10$ & 12486 & 0.82 & $71.1\%{\pm}3.3$ \\
-Full (D2Q+PER)    & $-12.39{\pm}0.09$ & 12240 & 0.74 & $79.7\%{\pm}2.9$ \\
+DQN & $-12.44\pm0.07$ & 12319 & 0.60 & $78.0\pm2.4$\\
++ Double & $-12.36\pm0.09$ & 12272 & 0.44 & $80.6\pm2.9$\\
++ Dueling & $-12.41\pm0.13$ & 12308 & 0.50 & $79.0\pm4.3$\\
++ PER only & $-12.65\pm0.10$ & 12486 & 0.82 & $71.1\pm3.3$\\
+Full (D+D+PER) & $-12.39\pm0.09$ & 12240 & 0.74 & $79.7\pm2.9$\\
 \midrule
-constr.\ (final)    & $-13.02{\pm}0.39$ & 12683 & 1.67 & $59.0\%{\pm}12.9$ \\
-constr.\ (best-val) & $-12.82{\pm}0.23$ & 12721 & 0.48 & $65.5\%{\pm}7.6$ \\
-constr.\_v2 (final) & $-12.70{\pm}0.13$ & 12600 & 0.50 & $69.4\%{\pm}4.4$ \\
+Constr., final & $-13.02\pm0.39$ & 12683 & 1.67 & $59.0\pm12.9$\\
+Constr., best-val & $-12.82\pm0.23$ & 12721 & 0.48 & $65.5\pm7.6$\\
+Constr.\ v2, final & $-12.70\pm0.13$ & 12600 & 0.50 & $69.4\pm4.4$\\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection*{Discussion}
+All unconstrained variants beat the rule on cost and return ($G=71$--$81\%$), cutting cost by 15--17\% (the full agent: $G=79.7\pm2.9\%$, $-17.0\%$ cost). However, they leave more critical load unserved than the rule (0.44--0.82 vs.\ 0.30 kWh/day), so part of the saving comes from accepting more shortfall risk. DQN, Double, Dueling and the full agent differ by less than the seed-to-seed spread, so with three seeds we cannot rank them. Prioritized replay alone scored about 7--10 points lower than the other variants; a possible cause is that rare, high-error outage transitions dominate sampling and add noise, but we did not test this.
 
-All unconstrained agents beat the rule baseline (16--17\,\% lower
-operating cost, 71--81\,\% of the oracle gap closed) but leave
-slightly more critical load unserved than the rule.  Differences
-among DQN variants are largely within seed noise; PER alone performs
-slightly worse, likely due to instability early in training.
+\begin{figure*}[t]
+\centering
+\figslot{fig_ablation.png}{0.8\textwidth}{2.11in}
+\caption{Ablation on the held-out test year: share of the rule-to-oracle gap closed (left) and unserved critical load (right; dashed = rule baseline). Error bars: std over seeds.}
+\label{fig:abl}
+\end{figure*}
 
-For the first constrained run, $\lambda$ reached its cap of 20 in all
-three seeds and training was highly unstable (gap $59.0\%\pm12.9$).
-For \texttt{constrained\_v2} ($\lambda_{\max}{=}5$, budget
-$=0.5$\,kWh/day, $\eta{=}0.05$), $\lambda$ \emph{also} reached its cap
-of 5 in all seeds; the tighter cap kept training more stable (gap
-$69.4\%\pm4.4$) but unserved critical energy (0.50\,kWh/day) barely
-met the budget, and cost performance remains below the unconstrained
-full agent (79.7\%), suggesting the Lagrangian scheme trades cost
-performance for only marginal blackout protection at this budget level.
+\begin{figure*}[t]
+\centering
+\figslot{fig_policy.png}{0.8\textwidth}{2.11in}
+\caption{Battery level of the trained agent and the rule on one test day without (left) and with (right) an outage (red); gray: tariff (scaled). In constrained v2 ($d{=}0.5$, $\eta{=}0.05$, $\lambda_{\max}{=}20$) final checkpoints reached $0.50\pm0.14$ kWh/day unserved, about at the relaxed budget, with $G=69.4\pm4.4\%$ and cost Rs\,12600: far safer and less variable than the first run ($1.67$ kWh, $G=59.0\%$), but not better than the unconstrained Double DQN ($0.44$ kWh, $G=80.6\%$), so compliance cost roughly 10 points of $G$. Forecast and warning noise is drawn from each policy's own random stream; the (day, outage) scenario set is identical across policies.}
+\label{fig:pol}
+\end{figure*}
 
-% =============================================================
+\textbf{Blackout constraint.} In both constrained configurations the multiplier $\lambda$ rose to its cap of 20 (a penalty of Rs\,4000/kWh on unserved critical load) and stayed at or near it for most of training: within about 500 episodes for the first run ($d{=}0.3$, $\eta{=}0.1$) and about 750 for v2 ($d{=}0.5$, $\eta{=}0.05$). The dual update therefore never reached equilibrium, and both runs behave like agents with a very large fixed penalty rather than enforcing their budgets as designed. The first run was unstable (validation return as low as $-19.8$): final checkpoints gave $G=59.0\pm12.9\%$ with 1.67 kWh unserved, and validation-selected checkpoints $65.5\pm7.6\%$ with $0.48\pm0.13$ kWh. Constrained v2 was steadier: $0.50\pm0.14$ kWh unserved, $G=69.4\pm4.4\%$, cost Rs\,12600. Neither matched unconstrained Double DQN (0.44 kWh, $G=80.6\%$). Since $\lambda$ saturated in both runs, we cannot say whether v2's improvement comes from the budget, the slower multiplier ramp, or seed noise. We suspect saturation arises because $\bar U$ is measured on $\epsilon$-greedy training episodes, which exceed the budget even late in training; we did not verify this.
+
 \section{Limitations}
+Outages, loads, tariff and battery/PV sizes are assumptions rather than measurements; a single site is used; NASA POWER values are satellite-derived on a coarse grid, not panel measurements; only three seeds were run, so small differences are not significant; the first constrained run (budget 0.3) did not meet its budget, and v2 met its relaxed budget of 0.5 only on average. Code, trained agents and reproduction commands are in the repository README.
 
-All environment parameters (load, tariff, outages) are assumptions;
-data come from one site with coarse satellite-derived solar irradiance;
-three seeds is insufficient to detect small differences; and neither
-constrained variant converged to a satisfactory unserved-energy budget.
-
-% =============================================================
-\section{Reproducibility}
-{\small
-\begin{verbatim}
-pip install -r requirements.txt
-python src/test_env.py   # sanity check
-python src/demo.py       # demo agent
-\end{verbatim}
-}
-\noindent
-Approximate CPU runtime: $\sim$16\,min per 3\,000-episode run
-(measured: 1.3\,min for 250 episodes, scaled $\times 12$).
-All trained weights (\texttt{.pt}), logs (\texttt{.json}), and figures
-(\texttt{.png}) are in \texttt{results/}.
+{\scriptsize
+\begin{thebibliography}{9}\setlength{\itemsep}{0pt}\setlength{\parsep}{0pt}
+\bibitem{dqn} V.~Mnih et al., ``Human-level control through deep reinforcement learning,'' \emph{Nature}, 518:529--533, 2015.
+\bibitem{ddqn} H.~van~Hasselt, A.~Guez, D.~Silver, ``Deep reinforcement learning with double Q-learning,'' AAAI, 2016.
+\bibitem{duel} Z.~Wang et al., ``Dueling network architectures for deep reinforcement learning,'' ICML, 2016.
+\bibitem{per} T.~Schaul et al., ``Prioritized experience replay,'' ICLR, 2016.
+\bibitem{power} NASA Prediction of Worldwide Energy Resources (POWER) Project, \url{https://power.larc.nasa.gov}.
+\bibitem{cmdp} E.~Altman, \emph{Constrained Markov Decision Processes}, Chapman \& Hall/CRC, 1999.
+\end{thebibliography}}
 
 \end{document}

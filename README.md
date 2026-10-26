@@ -52,7 +52,7 @@ All commands run from the repository root.
 
     # blackout-constrained agent (PowerShell loop; 3 seeds)
     foreach ($s in 0,1,2) { python src/train.py --name constrained --double --dueling --per --constrained --seed $s }
-    foreach ($s in 0,1,2) { python src/train.py --name constrained_v2 --double --dueling --per --constrained --lam_max 5 --budget 0.5 --eta 0.05 --seed $s }
+    foreach ($s in 0,1,2) { python src/train.py --name constrained_v2 --double --dueling --per --constrained --budget 0.5 --eta 0.05 --seed $s }
 
     # final tables and figures (test year 2023)
     python src/ablation_table.py
@@ -94,12 +94,11 @@ checkpoints (selected on 2022). Return and *G* use λ = 1 for all policies.
 **Findings.** All unconstrained agents beat the rule baseline (about 16–17% lower operating cost,
 71–81% of the gap to the oracle closed) but leave slightly more critical load unserved than the rule.
 Differences between DQN, Double, Dueling and the full agent are within seed noise; PER alone was
-slightly worse. In our first constrained run the multiplier λ saturated at its cap of 20 in all
-seeds and training was unstable. For constrained_v2 (lam_max 5, budget 0.5, η 0.05), λ also
-reached its cap of 5 in all seeds; the tighter cap kept training more stable but unserved critical
-energy (0.50 kWh/day) remained above the 0.5 kWh/day budget, and the cost gap closed (69.4%) is
-below the unconstrained full agent (79.7%), suggesting the constraint trades cost performance for
-only marginal blackout protection at this budget level.
+slightly worse. In both constrained runs the multiplier λ reached its cap of 20 in all seeds.
+For constrained_v2 (budget 0.5, η 0.05, same cap 20), λ saturated more slowly (~750 episodes
+vs. ~500) and training was steadier: 0.50 kWh/day unserved, G=69.4%±4.4, cost Rs 12600.
+Neither constrained variant matched unconstrained Double DQN (0.44 kWh, G=80.6%), so the
+Lagrangian scheme did not achieve its budget by design—it behaved like a large fixed penalty.
 
 ## 8. Repository layout
     src/env.py             simulator (MicrogridEnv)
