@@ -4,7 +4,8 @@
 
 An RL agent decides every hour how to operate a campus solar + battery system:
 charge, discharge or idle the battery, and optionally shed non-critical load. It must cut
-electricity cost while protecting critical load during grid outages. We implement the
+operating cost (energy purchases plus comfort and wear penalties) while protecting critical
+load during grid outages. We implement the
 simulator and the DQN family (DQN, Double, Dueling, Prioritized Replay, Lagrangian blackout
 constraint) from scratch in PyTorch/NumPy. No external RL library or repository is used.
 
@@ -59,7 +60,7 @@ All commands run from the repository root.
     python src/make_plots.py
 
 Trained models, training logs and figures are stored in `results/`.
-Approximate runtime: [X] minutes per training run on CPU.
+Approximate runtime: ~16 minutes per training run on CPU (measured: 1.3 min for 250 episodes, scaled ×12 for 3 000 episodes).
 
 ## 6. Baselines
 - **idle:** never uses the battery.
@@ -81,16 +82,24 @@ Approximate runtime: [X] minutes per training run on CPU.
 | Dueling Double DQN + PER (full) | -12.39 +- 0.09 | 12240 | 0.74 | 79.7% +- 2.9 |
 | constrained (final ckpt) | -13.02 +- 0.39 | 12683 | 1.67 | 59.0% +- 12.9 |
 | constrained (best-val ckpt) | -12.82 +- 0.23 | 12721 | 0.48 | 65.5% +- 7.6 |
-| constrained_v2 | [fill from your output] | | | |
+| constrained_v2 (final ckpt) | -12.70 +- 0.13 | 12600 | 0.50 | 69.4% +- 4.4 |
 
 ![ablation](results/fig_ablation.png)
 ![policy](results/fig_policy.png)
 
-**Findings.** All unconstrained agents beat the rule baseline (about 16-17% lower cost, 71-81%
-of the gap to the oracle closed) but leave slightly more critical load unserved than the rule.
+**Protocol:** test year 2023, 200 fixed scenarios (seed 11), 3 training seeds (0–2); unconstrained
+variants use final checkpoints; constrained models are shown with both final and best-validation
+checkpoints (selected on 2022). Return and *G* use λ = 1 for all policies.
+
+**Findings.** All unconstrained agents beat the rule baseline (about 16–17% lower operating cost,
+71–81% of the gap to the oracle closed) but leave slightly more critical load unserved than the rule.
 Differences between DQN, Double, Dueling and the full agent are within seed noise; PER alone was
-slightly worse. In our first constrained run the multiplier lambda saturated at its cap and
-training was unstable. [Describe v2 outcome here, honestly.]
+slightly worse. In our first constrained run the multiplier λ saturated at its cap of 20 in all
+seeds and training was unstable. For constrained_v2 (lam_max 5, budget 0.5, η 0.05), λ also
+reached its cap of 5 in all seeds; the tighter cap kept training more stable but unserved critical
+energy (0.50 kWh/day) remained above the 0.5 kWh/day budget, and the cost gap closed (69.4%) is
+below the unconstrained full agent (79.7%), suggesting the constraint trades cost performance for
+only marginal blackout protection at this budget level.
 
 ## 8. Repository layout
     src/env.py             simulator (MicrogridEnv)

@@ -1,0 +1,199 @@
+% ============================================================
+%  Outage-Aware Campus Microgrid Control with Deep RL
+%  2-page report  —  IEEE two-column format
+% ============================================================
+\documentclass[10pt,twocolumn]{article}
+
+% ---- packages -----------------------------------------------
+\usepackage[margin=1.8cm,top=2cm,bottom=2cm]{geometry}
+\usepackage{times}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{microtype}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{caption}
+\captionsetup{font=small,skip=4pt}
+
+% ---- title block --------------------------------------------
+\title{\textbf{Outage-Aware Campus Microgrid Control\\
+       with Deep Reinforcement Learning}}
+\author{[Name 1, Name 2, \ldots]\quad
+        \textit{AI, Assignment 2 --- Real-Life Use Cases of RL}}
+\date{}
+
+% =============================================================
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+% ---- ABSTRACT -----------------------------------------------
+\begin{abstract}
+We train a family of DQN agents---vanilla, Double, Dueling,
+Prioritised-Experience-Replay (PER), and Lagrangian-constrained
+variants---to operate a simulated campus solar-plus-battery microgrid.
+The best unconstrained agent (Dueling Double DQN + PER) cuts
+\textbf{operating cost (energy purchases plus comfort and wear
+penalties) by about 17\%} relative to the hand-written rule
+baseline and closes 80\,\% of the gap to a perfect-foresight oracle,
+while a Lagrangian multiplier scheme is investigated for critical-load
+protection. All components are implemented from scratch in PyTorch.
+\end{abstract}
+
+% =============================================================
+\section{Problem and RL Formulation}
+
+Each \textit{episode} is one simulated day (24 hourly steps).
+The \textbf{state} is an 11-dimensional vector: battery state of charge
+(\%), hour encoded as $(\sin,\cos)$, current solar generation, a 3-hour
+noisy solar forecast, electricity price, total load, a binary
+outage-active flag, and a noisy outage-warning signal.
+The \textbf{action space} has six discrete actions:
+\{charge, discharge, idle\}~$\times$~\{keep, shed non-critical load\}.
+
+The \textbf{reward} is
+\[
+r_t = -\bigl(c_{\text{grid}} + c_{\text{shed}} + c_{\text{cut}}
+             + c_{\text{wear}} + \lambda\,u_{\text{crit}}\bigr)\big/1000,
+\]
+where $c_{\text{grid}}$ is grid energy purchase cost, $c_{\text{shed}}$
+is voluntary shedding, $c_{\text{cut}}$ is forced-cut penalty,
+$c_{\text{wear}}$ is battery-cycle wear, and $u_{\text{crit}}$ is
+unserved critical energy.  For constrained agents $\lambda$ is updated
+by dual ascent so that average $u_{\text{crit}}$ stays near a per-day
+budget.
+
+\textbf{Data.} Real hourly solar irradiance from NASA POWER (2018--2023).
+Split: train 2018--2021, validation 2022, held-out test 2023.
+Battery: 400\,kWh / 100\,kW; 30\,\% of days have outages (2--4\,h).
+All load, tariff, and outage parameters are simulated assumptions.
+
+% =============================================================
+\section{Methods}
+
+We implement four incremental DQN improvements applied cumulatively:
+
+\begin{enumerate}\setlength\itemsep{1pt}
+  \item \textbf{Vanilla DQN} --- fixed target network, replay buffer.
+  \item \textbf{Double DQN} --- separate action-selection and evaluation
+        networks to reduce overestimation.
+  \item \textbf{Dueling DQN} --- separate value $V(s)$ and advantage
+        $A(s,a)$ streams.
+  \item \textbf{PER} --- prioritised experience replay weighted by TD
+        error.
+\end{enumerate}
+
+\textbf{Lagrangian constraint.}
+A constrained variant adds $\lambda$ as a trainable multiplier updated
+every 20 episodes via dual ascent:
+$\lambda \leftarrow \operatorname{clip}\!\bigl(\lambda +
+\eta(\bar u - B),\;0,\;\lambda_{\max}\bigr)$,
+where $B$ is the allowed unserved budget and $\eta$ is the step size.
+
+% =============================================================
+\section{Baselines}
+
+\textbf{Idle} --- battery never used.
+\textbf{Rule} --- sells at peak, stores spare solar, keeps a 30\,\%
+reserve, sheds during blackouts.
+\textbf{Oracle} --- per-day perfect-foresight dynamic programming;
+an upper-bound benchmark, not our agent.
+
+% =============================================================
+\section{Evaluation}
+\label{sec:eval}
+
+\textbf{Protocol.}
+All agents are evaluated on test year 2023 using 200 fixed (day,
+outage) scenarios drawn with seed 11.  Each DQN variant is trained
+with 3 seeds (0--2); we report mean\,$\pm$\,std.  Unconstrained
+variants use their final checkpoint; constrained models are shown
+with both the final and the best-validation checkpoint (selected on
+2022).
+
+Return $G$ and the reported \emph{Return} column are both computed
+with $\lambda{=}1$ for \emph{every} policy (constrained agents were
+trained with larger $\lambda$, so they are measured on a common
+yardstick rather than their own objective).
+``Cost'' is energy purchases plus shedding, forced-cut and wear
+penalties, and \emph{excludes} the critical-load penalty, which is
+reported separately as unserved energy (kWh/day).
+
+\textit{Note on randomness:} the (day, outage) scenarios are identical
+across all policies; forecast and outage-warning noise is drawn from
+each environment's own random stream and is therefore not bit-for-bit
+identical across policies---but the scenario set is the same.
+
+\begin{table}[h]
+\centering
+\caption{Test-year 2023 results (200 scenarios, 3 seeds,
+  mean\,$\pm$\,std).
+  ``Gap'' $= (\text{agent}-\text{rule})\,/\,(\text{oracle}-\text{rule})$.
+  Cost excludes critical-load penalty (see text).}
+\label{tab:results}
+\setlength\tabcolsep{3.5pt}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Method & Return & Cost & Unserved & Gap \\
+       &        & (Rs/d) & (kWh/d) & closed \\
+\midrule
+rule              & $-14.80$ & 14744 & 0.30 & 0\%          \\
+oracle            & $-11.77$ & 11772 & 0.00 & 100\%        \\
+\midrule
+DQN               & $-12.44{\pm}0.07$ & 12319 & 0.60 & $78.0\%{\pm}2.4$ \\
++~Double          & $-12.36{\pm}0.09$ & 12272 & 0.44 & $80.6\%{\pm}2.9$ \\
++~Dueling         & $-12.41{\pm}0.13$ & 12308 & 0.50 & $79.0\%{\pm}4.3$ \\
++~PER             & $-12.65{\pm}0.10$ & 12486 & 0.82 & $71.1\%{\pm}3.3$ \\
+Full (D2Q+PER)    & $-12.39{\pm}0.09$ & 12240 & 0.74 & $79.7\%{\pm}2.9$ \\
+\midrule
+constr.\ (final)    & $-13.02{\pm}0.39$ & 12683 & 1.67 & $59.0\%{\pm}12.9$ \\
+constr.\ (best-val) & $-12.82{\pm}0.23$ & 12721 & 0.48 & $65.5\%{\pm}7.6$ \\
+constr.\_v2 (final) & $-12.70{\pm}0.13$ & 12600 & 0.50 & $69.4\%{\pm}4.4$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection*{Discussion}
+
+All unconstrained agents beat the rule baseline (16--17\,\% lower
+operating cost, 71--81\,\% of the oracle gap closed) but leave
+slightly more critical load unserved than the rule.  Differences
+among DQN variants are largely within seed noise; PER alone performs
+slightly worse, likely due to instability early in training.
+
+For the first constrained run, $\lambda$ reached its cap of 20 in all
+three seeds and training was highly unstable (gap $59.0\%\pm12.9$).
+For \texttt{constrained\_v2} ($\lambda_{\max}{=}5$, budget
+$=0.5$\,kWh/day, $\eta{=}0.05$), $\lambda$ \emph{also} reached its cap
+of 5 in all seeds; the tighter cap kept training more stable (gap
+$69.4\%\pm4.4$) but unserved critical energy (0.50\,kWh/day) barely
+met the budget, and cost performance remains below the unconstrained
+full agent (79.7\%), suggesting the Lagrangian scheme trades cost
+performance for only marginal blackout protection at this budget level.
+
+% =============================================================
+\section{Limitations}
+
+All environment parameters (load, tariff, outages) are assumptions;
+data come from one site with coarse satellite-derived solar irradiance;
+three seeds is insufficient to detect small differences; and neither
+constrained variant converged to a satisfactory unserved-energy budget.
+
+% =============================================================
+\section{Reproducibility}
+{\small
+\begin{verbatim}
+pip install -r requirements.txt
+python src/test_env.py   # sanity check
+python src/demo.py       # demo agent
+\end{verbatim}
+}
+\noindent
+Approximate CPU runtime: $\sim$16\,min per 3\,000-episode run
+(measured: 1.3\,min for 250 episodes, scaled $\times 12$).
+All trained weights (\texttt{.pt}), logs (\texttt{.json}), and figures
+(\texttt{.png}) are in \texttt{results/}.
+
+\end{document}
