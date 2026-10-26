@@ -81,7 +81,7 @@ Approximate runtime: [X] minutes per training run on CPU.
 | Dueling Double DQN + PER (full) | -12.39 +- 0.09 | 12240 | 0.74 | 79.7% +- 2.9 |
 | constrained (final ckpt) | -13.02 +- 0.39 | 12683 | 1.67 | 59.0% +- 12.9 |
 | constrained (best-val ckpt) | -12.82 +- 0.23 | 12721 | 0.48 | 65.5% +- 7.6 |
-| constrained_v2 | [fill from your output] | | | |
+| constrained_v2 | -12.70 +- 0.13 | 12600 | 0.50 | 69.4% +- 4.4 |
 
 ![ablation](results/fig_ablation.png)
 ![policy](results/fig_policy.png)
