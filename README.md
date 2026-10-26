@@ -1,6 +1,6 @@
 # Outage-Aware Campus Microgrid Control with Deep Reinforcement Learning
 
-**Team:** [Name 1, Name 2, ...] | **Course:** AI, Assignment 2 (Real-Life Use Cases of RL)
+
 
 An RL agent decides every hour how to operate a campus solar + battery system:
 charge, discharge or idle the battery, and optionally shed non-critical load. It must cut
