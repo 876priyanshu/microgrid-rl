@@ -1,6 +1,7 @@
 import argparse, copy, json
 import numpy as np, torch
 from env import MicrogridEnv, R_SCALE
+
 from dqn import DQNAgent
 from baselines import make_scenarios, evaluate
 
@@ -9,9 +10,9 @@ ap.add_argument("--name", default="vanilla")
 ap.add_argument("--double", action="store_true")
 ap.add_argument("--dueling", action="store_true")
 ap.add_argument("--per", action="store_true")
-ap.add_argument("--constrained", action="store_true")   # learn lambda from a blackout budget
-ap.add_argument("--budget", type=float, default=0.3)    # allowed unserved critical kWh per day
-ap.add_argument("--eta", type=float, default=0.1)       # how fast lambda reacts
+ap.add_argument("--constrained", action="store_true")  
+ap.add_argument("--budget", type=float, default=0.3)    
+ap.add_argument("--eta", type=float, default=0.1)       
 ap.add_argument("--seed", type=int, default=0)
 ap.add_argument("--episodes", type=int, default=3000)
 ap.add_argument("--lam_max", type=float, default=20.0)
@@ -34,12 +35,12 @@ for ep in range(1, args.episodes + 1):
     while not done:
         a = agent.act(obs, eps)
         obs2, r, done, info = env.step(a)
-        r_base = -info["cost"] / R_SCALE                  # reward WITHOUT the critical-load term
+        r_base = -info["cost"] / R_SCALE                  
         agent.buf.add(obs, a, r_base, obs2, float(done), info["un_crit"])
         agent.learn()
         obs, ret, u_ep = obs2, ret + r, u_ep + info["un_crit"]
 
-    if args.constrained:                                   # dual ascent on lambda
+    if args.constrained:                                   
         recent_u.append(u_ep)
         if ep % LAM_EVERY == 0:
             lam = float(np.clip(lam + args.eta * (np.mean(recent_u) - args.budget), 0.0, 20.0))
@@ -48,7 +49,7 @@ for ep in range(1, args.episodes + 1):
     if ep % EVAL_EVERY == 0:
         res = evaluate(val_env, agent.greedy_policy(), val_sc)
         ret_v, unc_v = float(res["return"]), float(res["unserved_crit_kWh"])
-        score = ret_v - 0.5 * max(0.0, unc_v - args.budget)   # prefer checkpoints that respect the budget
+        score = ret_v - 0.5 * max(0.0, unc_v - args.budget)   
         if score > best_score:
             best_score, best_state = score, copy.deepcopy(agent.q.state_dict())
         log.append({"episode": ep, "lambda": lam, "train_return": ret,
@@ -57,7 +58,7 @@ for ep in range(1, args.episodes + 1):
               "unserved", round(unc_v, 1), "lambda", round(lam, 2))
 
 tag = f"results/{args.name}_s{args.seed}"
-torch.save(agent.q.state_dict(), tag + ".pt")              # final model
-torch.save(best_state, tag + "_best.pt")                   # best validation checkpoint
+torch.save(agent.q.state_dict(), tag + ".pt")              
+torch.save(best_state, tag + "_best.pt")                   
 json.dump(log, open(tag + ".json", "w"))
 print("saved", tag)
