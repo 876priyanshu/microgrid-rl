@@ -7,7 +7,7 @@ from env import MicrogridEnv, CAP, PRICE
 from dqn import QNet
 from baselines import rule_policy
 
-# ---------- 1. learning curves (validation return, mean +- std over seeds) ----------
+#  learning curves (validation return, mean +- std over seeds) 
 def curves(name):
     files = sorted(glob.glob(f"results/{name}_s[0-9].json"))
     if not files:
@@ -28,7 +28,7 @@ plt.xlabel("training episode"); plt.ylabel("validation return")
 plt.legend(fontsize=6); plt.tight_layout()
 plt.savefig("results/fig_learning.png", dpi=200); plt.close()
 
-# ---------- 2. ablation bars (held-out test year) ----------
+#  ablation bars (held-out test year) 
 tab = json.load(open("results/ablation_test.json"))
 try:
     tab_best = json.load(open("results/ablation_test_best.json"))
@@ -49,7 +49,7 @@ for a in ax:
     a.tick_params(axis="x", labelrotation=60, labelsize=6)
 plt.tight_layout(); plt.savefig("results/fig_ablation.png", dpi=200); plt.close()
 
-# ---------- 3. what did the agent learn? (battery level on one test day) ----------
+#  what did the agent learn? (battery level on one test day) 
 def load(path, dueling):
     q = QNet(11, 6, dueling=dueling)
     q.load_state_dict(torch.load(path)); q.eval()
