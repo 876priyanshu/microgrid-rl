@@ -1,7 +1,6 @@
 # Outage-Aware Campus Microgrid Control with Deep Reinforcement Learning
 
 
-
 An RL agent decides every hour how to operate a campus solar + battery system:
 charge, discharge or idle the battery, and optionally shed non-critical load. It must cut
 electricity cost while protecting critical load during grid outages. We implement the
