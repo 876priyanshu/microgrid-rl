@@ -1,4 +1,5 @@
 import sys, json, torch, numpy as np
+
 from env import MicrogridEnv
 from dqn import QNet
 from baselines import rule_policy, make_scenarios, evaluate, evaluate_oracle
@@ -6,6 +7,7 @@ from baselines import rule_policy, make_scenarios, evaluate, evaluate_oracle
 suffix = "_best" if "--best" in sys.argv else ""
 names = ["vanilla", "double", "dueling", "per", "full", "constrained", "constrained_v2"]
 seeds = [0, 1, 2]
+
 test_env = MicrogridEnv("data/solar_hourly.csv", years=[2023], seed=0)   # held-out TEST year
 sc = make_scenarios(test_env, n=200, seed=11)
 
@@ -18,6 +20,7 @@ def load_policy(path, dueling):
     return pol
 
 rule = {k: float(v) for k, v in evaluate(test_env, rule_policy, sc).items()}
+
 oracle = {k: float(v) for k, v in evaluate_oracle(test_env, sc).items()}
 print(f"rule   return {rule['return']:.2f}  cost {rule['cost_Rs']:.0f}  unserved {rule['unserved_crit_kWh']:.2f}")
 print(f"oracle return {oracle['return']:.2f}  cost {oracle['cost_Rs']:.0f}  unserved {oracle['unserved_crit_kWh']:.2f}\n")
