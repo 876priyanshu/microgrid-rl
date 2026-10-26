@@ -1,20 +1,20 @@
 import numpy as np
 import pandas as pd
 
-# ---- physical constants (our assumptions: state them in the report) ----
-CAP     = 400.0    # battery capacity, kWh
-P_MAX   = 100.0    # max charge / discharge power, kW
-ETA     = 0.95     # one-way efficiency
-PV_COEF = 0.32     # kW of solar per W/m^2 of sunlight
-CRIT    = 60.0     # critical load, kW
+#  physical constants 
+CAP     = 400.0    
+P_MAX   = 100.0    
+ETA     = 0.95     
+PV_COEF = 0.32   
+CRIT    = 60.0     
 SHAPE = np.array([0.5]*6 + [0.8]*3 + [1.0]*9 + [0.9]*4 + [0.6]*2)
-PRICE = np.array([5.0]*6 + [7.0]*12 + [10.0]*4 + [5.0]*2)   # Rs/kWh
-C_SHED, C_FORCED, C_CRIT = 15.0, 40.0, 200.0                # Rs/kWh penalties
+PRICE = np.array([5.0]*6 + [7.0]*12 + [10.0]*4 + [5.0]*2)  
+C_SHED, C_FORCED, C_CRIT = 15.0, 40.0, 200.0              
 R_SCALE = 1000.0
 
 class MicrogridEnv:
     """One episode = one day = 24 hourly steps."""
-    n_actions = 6   # {charge, discharge, idle} x {keep, shed non-critical}
+    n_actions = 6   
     obs_dim = 11
 
     def __init__(self, csv_path, years, outage_prob=0.3, seed=0):
@@ -34,7 +34,7 @@ class MicrogridEnv:
         self.pv = np.clip(self.sun[self.day], 0, None) * PV_COEF
         self.noncrit = (80 + 8*np.maximum(self.temp[self.day] - 25, 0)) * SHAPE
         self.out_start, self.out_len = -1, 0
-        if outage is not None:                      # fixed scenario: (start_hour, length)
+        if outage is not None:                     
             self.out_start, self.out_len = outage
         elif self.rng.random() < self.outage_prob:
             self.out_start = int(self.rng.integers(8, 21))
@@ -59,7 +59,7 @@ class MicrogridEnv:
 
     def step(self, a):
         h = self.h
-        mode, shed = a % 3, a // 3        # mode: 0 charge, 1 discharge, 2 idle
+        mode, shed = a % 3, a // 3        
         out = self._in_outage(h)
         solar = self.pv[h]
         noncrit = 0.0 if shed else self.noncrit[h]
@@ -68,15 +68,15 @@ class MicrogridEnv:
         if mode == 0:   p = min(P_MAX, (CAP - self.soc) / ETA)   # p > 0 charging
         elif mode == 1: p = -min(P_MAX, self.soc * ETA)          # p < 0 discharging
         else:           p = 0.0
-        if out and p > 0:                  # no grid: charge from spare solar only
+        if out and p > 0:                 
             p = min(p, max(solar - demand, 0.0))
         self.soc += p * ETA if p > 0 else p / ETA
         self.soc = float(np.clip(self.soc, 0.0, CAP))
 
-        gap = demand + max(p, 0.0) - solar - max(-p, 0.0)   # > 0: need grid power
+        gap = demand + max(p, 0.0) - solar - max(-p, 0.0)   
         grid = 0.0 if out else max(gap, 0.0)
         unserved = max(gap, 0.0) if out else 0.0
-        un_nc = min(unserved, noncrit)       # non-critical is cut first
+        un_nc = min(unserved, noncrit)       
         un_crit = unserved - un_nc
 
         shed_kwh = self.noncrit[h] if shed else 0.0
